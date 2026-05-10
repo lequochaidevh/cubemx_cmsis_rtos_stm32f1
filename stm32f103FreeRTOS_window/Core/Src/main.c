@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "mPrintf/mPrintf.h"
 
 /* USER CODE END Includes */
 
@@ -97,6 +98,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    HAL_GPIO_TogglePin(Led_Hearthbeat_GPIO_Port, Led_Hearthbeat_Pin);
+    HAL_GPIO_TogglePin(Led_Blink_Ctrl_GPIO_Port, Led_Blink_Ctrl_Pin);
+    mPrintf("Led Toggle\n");
+    HAL_Delay(1000); // ms
   }
   /* USER CODE END 3 */
 }
