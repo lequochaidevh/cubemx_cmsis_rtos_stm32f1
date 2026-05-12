@@ -59,10 +59,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define Led_Hearthbeat_Pin GPIO_PIN_13
 #define Led_Hearthbeat_GPIO_Port GPIOC
-#define Led_Blink_Ctrl_Pin GPIO_PIN_14
-#define Led_Blink_Ctrl_GPIO_Port GPIOC
-#define Button_BlinkLed_Ctrl_Pin GPIO_PIN_8
+#define Button_BlinkLed_Ctrl_Pin GPIO_PIN_6
 #define Button_BlinkLed_Ctrl_GPIO_Port GPIOA
+#define Led_Blink_Ctrl_Pin GPIO_PIN_9
+#define Led_Blink_Ctrl_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
