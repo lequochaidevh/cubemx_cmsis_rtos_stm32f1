@@ -2,7 +2,13 @@
 
 echo "--- Ubuntu 20 build with CMake ---"
 
-cd ../stm32f103FreeRTOS_window/
+mkdir stm32f103c8t6_build_v0.0.1
+
+cp -rf ../stm32f103FreeRTOS_window/* stm32f103c8t6_build_v0.0.1/
+
+cp -rf cmake stm32f103c8t6_build_v0.0.1/
+
+cd stm32f103c8t6_build_v0.0.1/
 
 rm -rf build/
 
