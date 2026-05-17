@@ -8,8 +8,18 @@ set(MX_Defines_Syms
     $<$<CONFIG:Debug>:DEBUG>
 )
 
+file(GLOB_RECURSE Application_Hdrs "${CMAKE_CURRENT_SOURCE_DIR}/../../Application/*.h")
+set(Application_Inc_Dirs "")
+foreach(header_file ${Application_Hdrs})
+    get_filename_component(header_dir ${header_file} DIRECTORY)
+    list(APPEND Application_Inc_Dirs ${header_dir})
+endforeach()
+list(REMOVE_DUPLICATES Application_Inc_Dirs) 
+
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
+    ${Application_Inc_Dirs}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Application
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F1xx_HAL_Driver/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy
@@ -18,12 +28,10 @@ set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM3
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32F1xx/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Application
 )
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Application/mPrintf/mPrintf.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/freertos.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f1xx_it.c
@@ -54,8 +62,6 @@ set(STM32_Drivers_Src
 )
 
 # Drivers Midllewares
-
-
 set(FreeRTOS_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/croutine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
@@ -69,6 +75,9 @@ set(FreeRTOS_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM3/port.c
 )
 
+# Application
+file(GLOB_RECURSE Application_Src "${CMAKE_CURRENT_SOURCE_DIR}/../../Application/*.c")
+
 # Link directories setup
 set(MX_LINK_DIRS
 
@@ -78,6 +87,7 @@ set(MX_LINK_LIBS
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
     FreeRTOS
+    Application
 	
 )
 # Interface library for includes and symbols
@@ -95,6 +105,11 @@ target_link_libraries(STM32_Drivers PUBLIC stm32cubemx)
 add_library(FreeRTOS OBJECT)
 target_sources(FreeRTOS PRIVATE ${FreeRTOS_Src})
 target_link_libraries(FreeRTOS PUBLIC stm32cubemx)
+
+
+add_library(Application OBJECT)
+target_sources(Application PRIVATE ${Application_Src})
+target_link_libraries(Application PUBLIC stm32cubemx)
 
 # Add STM32CubeMX generated application sources to the project
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${MX_Application_Src})
