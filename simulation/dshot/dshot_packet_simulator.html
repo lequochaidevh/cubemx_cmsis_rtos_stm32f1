@@ -1,0 +1,243 @@
+<h2 class="sr-only">DShot packet simulator — Input the throttle value to see 16-bit frame and the bitbang wave</h2>
+<style>
+.sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem}
+.label{font-size:13px;color:var(--color-text-secondary);margin-bottom:4px}
+.val{font-size:22px;font-weight:500;font-family:var(--font-mono)}
+.bits{display:flex;gap:3px;flex-wrap:nowrap;margin-top:12px;overflow:hidden}
+.bit{flex:1;min-width:0;height:36px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;font-family:var(--font-mono);cursor:pointer;transition:opacity .15s}
+.bit-1{background:#EEEDFE;color:#3C3489;border:0.5px solid #AFA9EC}
+.bit-0{background:#F1EFE8;color:#444441;border:0.5px solid #B4B2A9}
+.bit-ck{background:#E1F5EE;color:#085041;border:0.5px solid #5DCAA5}
+.seg-label{font-size:11px;color:var(--color-text-secondary);text-align:center;margin-top:4px}
+.wave-wrap{margin-top:16px;border-radius:var(--border-radius-md);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
+.field-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.field-row label{font-size:13px;color:var(--color-text-secondary);width:120px;flex-shrink:0}
+.timing-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.timing-table td,.timing-table th{padding:6px 10px;border-bottom:0.5px solid var(--color-border-tertiary);text-align:left}
+.timing-table th{color:var(--color-text-secondary);font-weight:500}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);font-weight:500}
+.badge-ok{background:#E1F5EE;color:#085041}
+.badge-stop{background:#FAECE7;color:#712B13}
+.c-note{font-size:12px;color:var(--color-text-secondary);margin-top:6px}
+</style>
+
+<div style="padding:1rem 0">
+
+<div class="sim-grid">
+  <div class="card">
+    <div class="label">throttle value</div>
+    <input type="range" min="0" max="2047" value="1000" id="thr" style="width:100%;margin:8px 0">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <span class="val" id="thr-val">1000</span>
+      <span id="thr-badge" class="badge badge-ok">RUNNING</span>
+    </div>
+    <div class="c-note">0 = motor stop &nbsp;|&nbsp; 48–2047 = throttle</div>
+  </div>
+  <div class="card">
+    <div class="label">telemetry request</div>
+    <div style="display:flex;gap:8px;margin:8px 0">
+      <button id="btn-telem-0" onclick="setTelem(0)" style="flex:1">0 — off</button>
+      <button id="btn-telem-1" onclick="setTelem(1)" style="flex:1">1 — on</button>
+    </div>
+    <div class="label" style="margin-top:8px">dshot protocol</div>
+    <div style="display:flex;gap:8px;margin:4px 0">
+      <button id="btn-d150" onclick="setProto('D150')" style="flex:1">D150</button>
+      <button id="btn-d300" onclick="setProto('D300')" style="flex:1">D300</button>
+      <button id="btn-d600" onclick="setProto('D600')" style="flex:1">D600</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:12px">
+  <div class="label">frame 16-bit (MSB first)</div>
+  <div class="bits" id="bit-row"></div>
+  <div style="display:flex;margin-top:4px;gap:3px" id="seg-row"></div>
+  <div style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap">
+    <div><span class="label">raw hex</span><div class="val" id="hex-val" style="font-size:16px">0x0000</div></div>
+    <div><span class="label">raw binary</span><div class="val" id="bin-val" style="font-size:14px;letter-spacing:1px">0000000000000000</div></div>
+    <div><span class="label">checksum (xor nibbles)</span><div class="val" id="ck-val" style="font-size:16px">0x0</div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:12px">
+  <div class="label" style="font-size: 20px;">the bigbang wave — <span id="proto-label">DShot300</span></div>
+  <canvas id="wave" height="80" style="width:100%;display:block;margin-top:8px"></canvas>
+  <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--color-text-secondary)"><span style="display:inline-block;width:24px;height:3px;background:#534AB7;vertical-align:middle;margin-right:4px"></span>bit = 1</span>
+    <span style="font-size:12px;color:var(--color-text-secondary)"><span style="display:inline-block;width:24px;height:3px;background:#888780;vertical-align:middle;margin-right:4px"></span>bit = 0</span>
+    <span style="font-size:12px;color:var(--color-text-secondary)" id="timing-hint"></span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="label">timing reference (STM32F4 @ 168 MHz)</div>
+  <table class="timing-table">
+    <tr><th>protocol</th><th>bit period</th><th>bit=1 HIGH</th><th>bit=0 HIGH</th><th>LOW (remainder)</th><th>cycles/bit</th></tr>
+    <tr id="row-D150"><td>DShot150</td><td>6.67 µs</td><td>5.00 µs</td><td>2.50 µs</td><td>LOW = period − HIGH</td><td>1120</td></tr>
+    <tr id="row-D300"><td>DShot300</td><td>3.33 µs</td><td>2.50 µs</td><td>1.25 µs</td><td>LOW = period − HIGH</td><td>560</td></tr>
+    <tr id="row-D600"><td>DShot600</td><td>1.67 µs</td><td>1.25 µs</td><td>0.625 µs</td><td>LOW = period − HIGH</td><td>280</td></tr>
+  </table>
+  <div class="c-note" style="margin-top:8px">Bitbang loop: SET GPIO → busy-wait HIGH cycles → RESET GPIO → busy-wait LOW cycles → next bit</div>
+</div>
+
+</div>
+
+<script>
+let telemBit = 0;
+let proto = 'D300';
+
+const protocols = {
+  D150:{period:6.67,hi1:5.00,hi0:2.50,cycles:1120,label:'DShot150'},
+  D300:{period:3.33,hi1:2.50,hi0:1.25,cycles:560,label:'DShot300'},
+  D600:{period:1.67,hi1:1.25,hi0:0.625,cycles:280,label:'DShot600'},
+};
+
+function computePacket(value, telem) {
+  let packet = (value << 1) | (telem ? 1 : 0);
+  let csum = 0, cd = packet;
+  for (let i = 0; i < 3; i++) { csum ^= cd; cd >>= 4; }
+  csum &= 0xf;
+  return (packet << 4) | csum;
+}
+
+function setTelem(v) {
+  telemBit = v;
+  ['btn-telem-0','btn-telem-1'].forEach((id,i)=>{
+    document.getElementById(id).style.fontWeight = (i===v)?'500':'400';
+    document.getElementById(id).style.borderColor = (i===v)?'var(--color-border-primary)':'var(--color-border-tertiary)';
+  });
+  update();
+}
+
+function setProto(p) {
+  proto = p;
+  ['D150','D300','D600'].forEach(id=>{
+    const btn = document.getElementById('btn-'+id.toLowerCase());
+    btn.style.fontWeight = (id===p)?'500':'400';
+    btn.style.borderColor = (id===p)?'var(--color-border-primary)':'var(--color-border-tertiary)';
+    document.getElementById('row-'+id).style.fontWeight = (id===p)?'500':'400';
+    document.getElementById('row-'+id).style.background = (id===p)?'var(--color-background-secondary)':'';
+  });
+  document.getElementById('proto-label').textContent = protocols[p].label;
+  const timingHint = document.getElementById('timing-hint');
+  timingHint.textContent =
+    'bit period: '+protocols[p].period+' µs | '+protocols[p].cycles+' cycles/bit @ 168MHz';
+  timingHint.style.fontSize = '16px';;
+  update();
+}
+
+function update() {
+  const thr = parseInt(document.getElementById('thr').value);
+  document.getElementById('thr-val').textContent = thr;
+  const badge = document.getElementById('thr-badge');
+  if (thr === 0) { badge.textContent='STOP'; badge.className='badge badge-stop'; }
+  else if (thr < 48) { badge.textContent='CMD'; badge.className='badge'; badge.style.background='#FAEEDA'; badge.style.color='#633806'; }
+  else { badge.textContent='RUNNING'; badge.className='badge badge-ok'; badge.style.background = ''; badge.style.color = '';}
+
+  const packet = computePacket(thr, telemBit);
+
+  document.getElementById('hex-val').textContent = '0x'+packet.toString(16).toUpperCase().padStart(4,'0');
+  document.getElementById('bin-val').textContent = packet.toString(2).padStart(16,'0');
+
+  let csum = 0, cd = (thr << 1) | telemBit;
+  for (let i = 0; i < 3; i++) { csum ^= cd; cd >>= 4; }
+  document.getElementById('ck-val').textContent = '0x'+(csum&0xf).toString(16).toUpperCase();
+
+  renderBits(packet);
+  renderWave(packet);
+}
+
+function renderBits(packet) {
+  const row = document.getElementById('bit-row');
+  const seg = document.getElementById('seg-row');
+  row.innerHTML = ''; seg.innerHTML = '';
+  const bits = [];
+  for (let i = 15; i >= 0; i--) bits.push((packet >> i) & 1);
+
+  bits.forEach((b, i) => {
+    const d = document.createElement('div');
+    const isCheck = i >= 12;
+    d.className = 'bit ' + (isCheck ? 'bit-ck' : (b ? 'bit-1' : 'bit-0'));
+    d.textContent = b;
+    d.title = isCheck ? 'checksum bit '+(15-i) : (i < 11 ? 'throttle bit '+(10-i) : 'telemetry');
+    row.appendChild(d);
+  });
+
+  const labels = [
+    {span:11,text:'throttle (11 bit)'},
+    {span:1,text:'telem'},
+    {span:4,text:'checksum (4 bit)'},
+  ];
+  let col = 0;
+  labels.forEach(l=>{
+    const d = document.createElement('div');
+    d.style.cssText = 'flex:'+l.span+';min-width:0;font-size:11px;color:var(--color-text-secondary);text-align:center';
+    d.textContent = l.text;
+    seg.appendChild(d);
+    col += l.span;
+  });
+}
+
+function renderWave(packet) {
+  const canvas = document.getElementById('wave');
+  const W = canvas.offsetWidth || 620;
+  canvas.width = W;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, 80);
+
+  const p = protocols[proto];
+  const bitW = (W - 8) / 16;
+  const yHigh = 8, yLow = 60, mid = 34;
+
+  const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const col1 = isDark ? '#AFA9EC' : '#534AB7';
+  const col0 = isDark ? '#B4B2A9' : '#888780';
+  const colLine = isDark ? '#444441' : '#D3D1C7';
+
+  ctx.strokeStyle = colLine;
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+  ctx.setLineDash([]);
+
+  let x = 4;
+  for (let i = 15; i >= 0; i--) {
+    const bit = (packet >> i) & 1;
+    const hiRatio = bit ? (p.hi1 / p.period) : (p.hi0 / p.period);
+    const hiW = bitW * hiRatio;
+    const loW = bitW - hiW;
+    const color = bit ? col1 : col0;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, yLow);
+    ctx.lineTo(x, yHigh);
+    ctx.lineTo(x + hiW, yHigh);
+    ctx.lineTo(x + hiW, yLow);
+    ctx.lineTo(x + bitW, yLow);
+    ctx.stroke();
+
+    ctx.font = '9px var(--font-mono)';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(bit, x + bitW/2, 76);
+
+    ctx.strokeStyle = colLine;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2,2]);
+    ctx.beginPath(); ctx.moveTo(x + bitW, yHigh-2); ctx.lineTo(x + bitW, yLow+2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    x += bitW;
+  }
+}
+
+document.getElementById('thr').addEventListener('input', update);
+
+setTelem(0);
+setProto('D300');
+update();
+window.addEventListener('resize', ()=>{ const p=computePacket(parseInt(document.getElementById('thr').value),telemBit); renderWave(p); });
+</script>
