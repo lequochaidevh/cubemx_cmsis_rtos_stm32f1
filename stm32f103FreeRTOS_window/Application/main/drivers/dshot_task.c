@@ -1,6 +1,10 @@
 #include "dshot_task.h"
-#include "pch.h"
-#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+// Start file
+
 // The throttle value can be set from another task. (PID, RC receiver...)
 // volatile: prevent compiler caching
 static volatile uint16_t g_throttle = 0;
@@ -16,19 +20,6 @@ static void dwt_init(void) {
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-// #define DELAY_CYCLES(n)
-//   if (true) {
-//     uint32_t _s = DWT->CYCCNT;
-//     while ((DWT->CYCCNT - _s) < (uint32_t)(n)) {
-//     }
-//   }
-
-static inline void DELAY_CYCLES(uint32_t n) {
-  uint32_t _srccnt = DWT->CYCCNT;
-  while ((DWT->CYCCNT - _srccnt) < n)
-    ;
-}
-
 #define DELAY_CYCLES(n)                                                        \
   do {                                                                         \
     uint32_t _s = DWT->CYCCNT;                                                 \
@@ -36,10 +27,10 @@ static inline void DELAY_CYCLES(uint32_t n) {
     }                                                                          \
   } while (0)
 
-// ── Gửi 1 frame ──────────────────────────────────────────────
+// ── Send 1 frame ──────────────────────────────────────────────
 static void dshot_send_frame(GPIO_TypeDef *port, uint16_t pin,
                              uint16_t packet) {
-  __disable_irq(); // <-- bắt buộc: không để RTOS preempt giữa chừng
+  __disable_irq(); // require
 
   for (int i = 15; i >= 0; i--) {
     port->BSRR = pin;
@@ -53,13 +44,13 @@ static void dshot_send_frame(GPIO_TypeDef *port, uint16_t pin,
       DELAY_CYCLES(DS_L0);
     }
   }
-  port->BSRR = (uint32_t)pin << 16; // đảm bảo LOW
+  port->BSRR = (uint32_t)pin << 16; // ensure LOW
   DELAY_CYCLES(DS_RST);
 
-  __enable_irq(); // <-- trả interrupt lại cho RTOS
+  __enable_irq(); // <-- unlock interrupt for RTOS task
 }
 
-// ── Task chính ────────────────────────────────────────────────
+// ── Task core ────────────────────────────────────────────────
 void DShot_Task(void const *argument) {
   dwt_init();
 
@@ -71,6 +62,11 @@ void DShot_Task(void const *argument) {
     uint16_t packet = prepareDshotPacket(&pcb);
     dshot_send_frame(GPIOA, GPIO_PIN_1, packet);
 
-    osDelay(1); // yield cho RTOS, đúng 1ms loop
+    osDelay(1); // yield for RTOS, 1ms loop
   }
 }
+
+// End file
+#ifdef __cplusplus
+}
+#endif
