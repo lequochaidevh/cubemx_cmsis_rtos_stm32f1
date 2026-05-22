@@ -4,7 +4,9 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/Application/Main/Test/Unit/"
+                "${workspaceFolder}/Application/main/**",
+                "${workspaceFolder}/Application/main/common/**",
+                "${workspaceFolder}/Application/main/drivers/**"
             ],
             "compilerPath": "/usr/bin/gcc",
             "cppStandard": "c++17",
